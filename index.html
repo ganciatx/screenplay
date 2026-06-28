@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#6b8afd">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Screenplay">
+  <title>Screenplay</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="toolbar">
+    <div class="toolbar-left">
+      <button type="button" id="btn-sidebar" class="toolbar-btn icon-btn mobile-only" aria-label="Toggle sidebar">☰</button>
+      <h1 class="app-title">Screenplay</h1>
+      <input type="text" id="script-title" class="script-title-input" placeholder="Untitled Screenplay" spellcheck="false">
+      <button type="button" id="btn-title-page" class="toolbar-btn" title="Edit title page">Title Page</button>
+    </div>
+    <div class="toolbar-center" id="element-toolbar">
+      <div class="element-selector" role="toolbar" aria-label="Element type">
+        <button type="button" class="element-btn active" data-type="scene-heading" title="Scene Heading (Ctrl+1)">Scene</button>
+        <button type="button" class="element-btn" data-type="action" title="Action (Ctrl+2)">Action</button>
+        <button type="button" class="element-btn" data-type="character" title="Character (Ctrl+3)">Character</button>
+        <button type="button" class="element-btn" data-type="parenthetical" title="Parenthetical (Ctrl+4)">Paren</button>
+        <button type="button" class="element-btn" data-type="dialogue" title="Dialogue (Ctrl+5)">Dialogue</button>
+        <button type="button" class="element-btn" data-type="transition" title="Transition (Ctrl+6)">Trans</button>
+      </div>
+    </div>
+    <div class="toolbar-right">
+      <span id="sync-dot" class="sync-dot" data-state="local" title="Local only"></span>
+      <button type="button" id="btn-account" class="toolbar-btn" title="Sign in to sync">Sign In</button>
+      <button type="button" id="btn-new" class="toolbar-btn" title="New script">New</button>
+      <button type="button" id="btn-open" class="toolbar-btn hide-mobile" title="Open script">Open</button>
+      <button type="button" id="btn-save" class="toolbar-btn" title="Save script (Ctrl+S)">Save</button>
+      <div class="export-dropdown hide-mobile">
+        <button type="button" id="btn-export" class="toolbar-btn" title="Export">Export ▾</button>
+        <div class="export-menu hidden" id="export-menu">
+          <button type="button" data-format="txt">Plain Text (.txt)</button>
+          <button type="button" data-format="fountain">Fountain (.fountain)</button>
+        </div>
+      </div>
+      <button type="button" id="btn-print" class="toolbar-btn hide-mobile" title="Print / PDF (Ctrl+P)">Print</button>
+      <button type="button" id="btn-theme" class="toolbar-btn icon-btn" title="Toggle theme" aria-label="Toggle theme">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5"/>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <aside class="sidebar" id="sidebar">
+    <section class="sidebar-section">
+      <h2>My Scripts</h2>
+      <nav id="script-library" class="script-library" aria-label="Script library">
+        <p class="empty-state">Sign in to sync scripts across devices</p>
+      </nav>
+    </section>
+    <section class="sidebar-section">
+      <h2>Script Info</h2>
+      <dl class="stats">
+        <div><dt>Pages</dt><dd id="stat-pages">1</dd></div>
+        <div><dt>Scenes</dt><dd id="stat-scenes">0</dd></div>
+        <div><dt>Words</dt><dd id="stat-words">0</dd></div>
+      </dl>
+    </section>
+    <section class="sidebar-section">
+      <h2>Characters</h2>
+      <nav id="character-nav" class="scene-nav" aria-label="Characters">
+        <p class="empty-state">No characters yet</p>
+      </nav>
+    </section>
+    <section class="sidebar-section">
+      <h2>Scenes</h2>
+      <nav id="scene-nav" class="scene-nav" aria-label="Scene navigation">
+        <p class="empty-state">No scenes yet</p>
+      </nav>
+    </section>
+    <section class="sidebar-section shortcuts hide-mobile">
+      <h2>Shortcuts</h2>
+      <ul>
+        <li><kbd>Tab</kbd> Cycle element</li>
+        <li><kbd>Enter</kbd> New line</li>
+        <li><kbd>Ctrl+1–6</kbd> Set element</li>
+        <li><kbd>Ctrl+F</kbd> Find</li>
+        <li><kbd>Ctrl+H</kbd> Replace</li>
+        <li><kbd>Ctrl+S</kbd> Save</li>
+        <li><kbd>Ctrl+P</kbd> Print</li>
+      </ul>
+    </section>
+  </aside>
+
+  <main class="editor-container">
+    <div id="title-page-view" class="page-wrapper title-page-wrapper hidden"></div>
+    <div id="script-view" class="page-wrapper">
+      <div id="editor" class="editor" contenteditable="true" spellcheck="true" aria-label="Screenplay editor"></div>
+    </div>
+    <div id="print-title-page" class="print-only"></div>
+  </main>
+
+  <footer class="status-bar">
+    <span id="status-view">Script</span>
+    <span id="status-element">Scene Heading</span>
+    <span id="status-cursor">Line 1</span>
+    <span id="status-save">Ready</span>
+  </footer>
+
+  <!-- Find & Replace panel -->
+  <div id="find-replace-panel" class="find-panel hidden" role="dialog" aria-label="Find and replace">
+    <div class="find-panel-header">
+      <span class="panel-title">Find</span>
+      <button type="button" id="find-close" class="find-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="find-panel-body">
+      <label class="find-label">
+        Find
+        <input type="text" id="find-input" class="find-input" spellcheck="false" autocomplete="off">
+      </label>
+      <div id="replace-row" class="hidden">
+        <label class="find-label">
+          Replace
+          <input type="text" id="replace-input" class="find-input" spellcheck="false" autocomplete="off">
+        </label>
+      </div>
+      <div class="find-actions">
+        <span id="find-count" class="find-count"></span>
+        <button type="button" id="find-prev" class="toolbar-btn">Prev</button>
+        <button type="button" id="find-next" class="toolbar-btn">Next</button>
+        <button type="button" id="replace-one" class="toolbar-btn hidden-replace-btn">Replace</button>
+        <button type="button" id="replace-all" class="toolbar-btn hidden-replace-btn">All</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth modal -->
+  <div id="auth-modal" class="modal hidden" role="dialog" aria-label="Sign in">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Sign In</h2>
+        <button type="button" id="auth-close" class="find-close">&times;</button>
+      </div>
+      <p class="modal-desc">Sign in with the same account on your computer and iPad to sync scripts automatically.</p>
+      <label class="find-label">Email<input type="email" id="auth-email" class="find-input" autocomplete="email"></label>
+      <label class="find-label">Password<input type="password" id="auth-password" class="find-input" autocomplete="current-password"></label>
+      <div class="modal-actions">
+        <button type="button" id="auth-signin" class="toolbar-btn primary">Sign In</button>
+        <button type="button" id="auth-signup" class="toolbar-btn">Create Account</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Setup modal (first-time cloud config) -->
+  <div id="setup-modal" class="modal hidden" role="dialog" aria-label="Setup sync">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Setup Cloud Sync</h2>
+        <button type="button" id="setup-close" class="find-close">&times;</button>
+      </div>
+      <p class="modal-desc">Connect to a free <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a> project to sync scripts across devices. See README for setup steps.</p>
+      <label class="find-label">Project URL<input type="url" id="setup-url" class="find-input" placeholder="https://xxxxx.supabase.co"></label>
+      <label class="find-label">Anon Key<input type="text" id="setup-key" class="find-input" placeholder="eyJ..."></label>
+      <div class="modal-actions">
+        <button type="button" id="setup-save" class="toolbar-btn primary">Save & Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="file-input" accept=".spx,.json,.txt,.fountain" hidden>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
