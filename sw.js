@@ -1,4 +1,4 @@
-const CACHE = 'screenplay-v1';
+const CACHE = 'screenplay-v2';
 const ASSETS = [
   './',
   './index.html',

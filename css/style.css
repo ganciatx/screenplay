@@ -478,7 +478,8 @@ kbd {
 }
 
 .find-panel.hidden {
-  display: none;
+  display: none !important;
+  pointer-events: none !important;
 }
 
 .find-panel-header {
@@ -812,7 +813,13 @@ kbd {
 }
 
 .modal.hidden {
-  display: none;
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden;
+}
+
+.modal:not(.hidden) {
+  pointer-events: auto;
 }
 
 .modal-content {
@@ -898,8 +905,16 @@ kbd {
     box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
   }
 
+  .sidebar:not(.open) {
+    transform: translateX(-100%);
+    pointer-events: none;
+    visibility: hidden;
+  }
+
   .sidebar.open {
     transform: translateX(0);
+    pointer-events: auto;
+    visibility: visible;
   }
 
   .mobile-only {

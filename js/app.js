@@ -549,31 +549,36 @@ async function init() {
   loadTheme();
   bindEvents();
 
-  syncManager = initSyncManager({
-    loadScript,
-    getSnapshot: getScriptSnapshot,
-    setDirty,
-    setSyncStatus,
-    isDirty: () => isDirty,
-    confirmDiscard: () => confirm('You have unsaved changes. Continue?'),
-    hasLoadedScript: () => hasLoadedScript,
-  });
+  try {
+    syncManager = initSyncManager({
+      loadScript,
+      getSnapshot: getScriptSnapshot,
+      setDirty,
+      setSyncStatus,
+      isDirty: () => isDirty,
+      confirmDiscard: () => confirm('You have unsaved changes. Continue?'),
+      hasLoadedScript: () => hasLoadedScript,
+    });
 
-  const syncResult = await syncManager.init();
+    const syncResult = await syncManager.init();
 
-  if (!syncResult.skipLocalDraft) {
-    const draft = loadFromLocalStorage();
-    if (draft?.lines?.length) {
-      const localId = generateLocalId();
-      syncManager.setCurrentScriptId(localId);
-      scriptTitle.value = draft.title || '';
-      titlePageData = draft.titlePage || createTitlePageData({ title: draft.title });
-      initEditorContent(editor, draft.lines);
-      hasLoadedScript = true;
-    } else {
-      initEditorContent(editor);
-      syncManager.setCurrentScriptId(generateLocalId());
+    if (!syncResult.skipLocalDraft) {
+      const draft = loadFromLocalStorage();
+      if (draft?.lines?.length) {
+        const localId = generateLocalId();
+        syncManager.setCurrentScriptId(localId);
+        scriptTitle.value = draft.title || '';
+        titlePageData = draft.titlePage || createTitlePageData({ title: draft.title });
+        initEditorContent(editor, draft.lines);
+        hasLoadedScript = true;
+      } else {
+        initEditorContent(editor);
+        syncManager.setCurrentScriptId(generateLocalId());
+      }
     }
+  } catch (err) {
+    console.error('Sync init failed, running in local mode:', err);
+    initEditorContent(editor);
   }
 
   renderTitlePage(titlePageView, titlePageData, (data) => {

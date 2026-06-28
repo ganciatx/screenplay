@@ -261,6 +261,8 @@ export function initSyncManager(handlers) {
 
   function closeAuthModal() {
     els.authModal?.classList.add('hidden');
+    els.authModal?.setAttribute('hidden', '');
+    els.authModal?.setAttribute('aria-hidden', 'true');
   }
 
   function showAuthModal() {
@@ -269,10 +271,14 @@ export function initSyncManager(handlers) {
       return;
     }
     els.authModal?.classList.remove('hidden');
+    els.authModal?.removeAttribute('hidden');
+    els.authModal?.setAttribute('aria-hidden', 'false');
   }
 
   function showSetupModal() {
     els.setupModal?.classList.remove('hidden');
+    els.setupModal?.removeAttribute('hidden');
+    els.setupModal?.setAttribute('aria-hidden', 'false');
     const cfg = getEffectiveConfig();
     document.getElementById('setup-url').value = cfg.supabaseUrl || '';
     document.getElementById('setup-key').value = cfg.supabaseAnonKey || '';
@@ -280,6 +286,8 @@ export function initSyncManager(handlers) {
 
   function closeSetupModal() {
     els.setupModal?.classList.add('hidden');
+    els.setupModal?.setAttribute('hidden', '');
+    els.setupModal?.setAttribute('aria-hidden', 'true');
   }
 
   async function updateAccountButton() {
