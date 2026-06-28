@@ -77,9 +77,59 @@ export async function getSession() {
   return data.session;
 }
 
+/** Wait for Supabase to restore the session from storage before cloud writes. */
+export async function waitForInitialAuth() {
+  const client = await getClient();
+  if (!client) return null;
+
+  const { data: { session } } = await client.auth.getSession();
+  if (session?.user) {
+    const auth = await requireAuth();
+    return auth?.user ?? null;
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (user) => {
+      if (settled) return;
+      settled = true;
+      subscription.unsubscribe();
+      resolve(user);
+    };
+
+    const { data: { subscription } } = client.auth.onAuthStateChange(async (event, nextSession) => {
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+        if (nextSession?.user) {
+          const auth = await requireAuth();
+          finish(auth?.user ?? nextSession.user);
+        } else {
+          finish(null);
+        }
+      }
+    });
+
+    setTimeout(() => finish(null), 4000);
+  });
+}
+
+/** Validate JWT with Supabase before database writes. */
+export async function requireAuth() {
+  const client = await getClient();
+  if (!client) return null;
+
+  let { data: { user }, error } = await client.auth.getUser();
+  if (error || !user) {
+    const { data: refreshed, error: refreshError } = await client.auth.refreshSession();
+    if (refreshError || !refreshed.session?.user) return null;
+    user = refreshed.session.user;
+  }
+
+  return { client, user };
+}
+
 export async function getUser() {
-  const session = await getSession();
-  return session?.user ?? null;
+  const auth = await requireAuth();
+  return auth?.user ?? null;
 }
 
 export async function signIn(email, password) {
@@ -93,7 +143,12 @@ export async function signUp(email, password) {
   const client = await getClient();
   const { data, error } = await client.auth.signUp({ email, password });
   if (error) throw error;
-  return data.user;
+
+  if (data.session) return data.user;
+
+  const signInResult = await client.auth.signInWithPassword({ email, password });
+  if (signInResult.error) throw signInResult.error;
+  return signInResult.data.user;
 }
 
 export async function signOut() {
@@ -174,17 +229,13 @@ export async function saveCloudScript(script) {
     return { offline: true, script: { ...script, updatedAt } };
   }
 
-  const client = await getClient();
-  if (!client) {
+  const auth = await requireAuth();
+  if (!auth) {
     await idbPushSyncQueue(buildQueueItem(script, updatedAt, localId));
     return { offline: true, script: { ...script, updatedAt } };
   }
 
-  const user = await getUser();
-  if (!user) {
-    await idbPushSyncQueue(buildQueueItem(script, updatedAt, localId));
-    return { offline: true, script: { ...script, updatedAt } };
-  }
+  const { client, user } = auth;
 
   try {
     let saved;
@@ -196,7 +247,6 @@ export async function saveCloudScript(script) {
           title: script.title,
           title_page: script.titlePage,
           lines: script.lines,
-          user_id: user.id,
         })
         .select()
         .single();
@@ -242,10 +292,10 @@ function buildQueueItem(script, updatedAt, id) {
 }
 
 export async function createCloudScript(title = 'Untitled Screenplay') {
-  const client = await getClient();
-  const user = await getUser();
-  if (!client || !user) throw new Error('Not signed in');
+  const auth = await requireAuth();
+  if (!auth) throw new Error('Not signed in');
 
+  const { client } = auth;
   const { data, error } = await client
     .from('scripts')
     .insert({
@@ -255,7 +305,6 @@ export async function createCloudScript(title = 'Untitled Screenplay') {
         { type: 'scene-heading', text: 'INT. LOCATION - DAY' },
         { type: 'action', text: '' },
       ],
-      user_id: user.id,
     })
     .select()
     .single();
@@ -281,19 +330,19 @@ export async function flushSyncQueue() {
   const queue = await idbGetSyncQueue();
   for (const item of queue) {
     try {
-      const client = await getClient();
-      const user = await getUser();
-      if (!client || !user) break;
+      const auth = await requireAuth();
+      if (!auth) break;
+
+      const { client } = auth;
 
       if (isLocalScriptId(item.id)) {
         await client.from('scripts').insert({
           title: item.title,
           title_page: item.title_page,
           lines: item.lines,
-          user_id: user.id,
         });
       } else {
-        await client.from('scripts').upsert({ ...item, user_id: user.id });
+        await client.from('scripts').upsert({ ...item, user_id: auth.user.id });
       }
       await idbClearSyncQueueItem(item.id);
     } catch {

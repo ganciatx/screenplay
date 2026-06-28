@@ -19,6 +19,7 @@ import {
   getLastOpenedScriptId,
   generateLocalId,
   isLocalScriptId,
+  waitForInitialAuth,
 } from './cloud-sync.js';
 import { SYNC_CONFIG } from './config.js';
 
@@ -250,8 +251,12 @@ export function initSyncManager(handlers) {
 
   async function handleSignUp(email, password) {
     await signUp(email, password);
+    await flushSyncQueue();
+    if (isLocalScriptId(currentScriptId)) {
+      await pushToCloud(true);
+    }
+    await refreshLibrary();
     closeAuthModal();
-    alert('Account created! Check your email if confirmation is required, then sign in.');
   }
 
   async function openLastOrFirst() {
@@ -382,7 +387,7 @@ export function initSyncManager(handlers) {
     await updateAccountButton();
 
     if (isCloudConfigured()) {
-      const user = await getUser();
+      const user = await waitForInitialAuth();
       if (user) {
         await flushSyncQueue();
         await refreshLibrary();
