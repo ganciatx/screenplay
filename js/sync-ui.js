@@ -393,10 +393,6 @@ export function initSyncManager(handlers) {
           await openScriptById(lastId);
           return { skipLocalDraft: true };
         }
-
-        if (isLocalScriptId(currentScriptId)) {
-          // migrated after app.js assigns the local script id
-        }
       } else {
         updateSyncDot('local');
         await refreshLibrary();
