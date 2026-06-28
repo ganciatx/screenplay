@@ -45,7 +45,7 @@ import {
 import { initAutocomplete } from './autocomplete.js';
 import { initFindReplace } from './find-replace.js';
 import { initSyncManager } from './sync-ui.js';
-import { generateLocalId, setLastOpenedScriptId } from './cloud-sync.js';
+import { generateLocalId, setLastOpenedScriptId, getUser, isLocalScriptId } from './cloud-sync.js';
 import { idbPutScript } from './idb.js';
 
 const editor = document.getElementById('editor');
@@ -591,6 +591,13 @@ async function init() {
   setCurrentElementType('scene-heading');
   setDirty(false);
   refreshUI();
+
+  if (syncManager && !syncResult.skipLocalDraft) {
+    const user = await getUser();
+    if (user && isLocalScriptId(syncManager.getCurrentScriptId())) {
+      await syncManager.pushToCloud(true);
+    }
+  }
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});

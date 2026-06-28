@@ -18,6 +18,7 @@ import {
   setLastOpenedScriptId,
   getLastOpenedScriptId,
   generateLocalId,
+  isLocalScriptId,
 } from './cloud-sync.js';
 import { SYNC_CONFIG } from './config.js';
 
@@ -186,6 +187,7 @@ export function initSyncManager(handlers) {
     setSyncStatus?.('Syncing…');
 
     try {
+      const previousId = currentScriptId;
       const result = await saveCloudScript({
         id: currentScriptId,
         title: snap.title,
@@ -193,6 +195,12 @@ export function initSyncManager(handlers) {
         lines: snap.lines,
         updatedAt: currentUpdatedAt,
       });
+
+      if (result.script.id !== previousId) {
+        currentScriptId = result.script.id;
+        await setLastOpenedScriptId(result.script.id);
+        subscribeToScript(result.script.id, handleRemoteUpdate);
+      }
 
       currentUpdatedAt = result.script.updatedAt;
       updateSyncDot(result.offline ? 'offline' : 'synced');
@@ -232,6 +240,9 @@ export function initSyncManager(handlers) {
   async function handleSignIn(email, password) {
     await signIn(email, password);
     await flushSyncQueue();
+    if (isLocalScriptId(currentScriptId)) {
+      await pushToCloud(true);
+    }
     await refreshLibrary();
     await openLastOrFirst();
     closeAuthModal();
@@ -245,7 +256,7 @@ export function initSyncManager(handlers) {
 
   async function openLastOrFirst() {
     const lastId = await getLastOpenedScriptId();
-    if (lastId) {
+    if (lastId && !isLocalScriptId(lastId)) {
       const exists = scriptList.find((s) => s.id === lastId);
       if (exists) {
         await openScriptById(lastId);
@@ -378,9 +389,13 @@ export function initSyncManager(handlers) {
         updateSyncDot('synced');
 
         const lastId = await getLastOpenedScriptId();
-        if (lastId && !handlers.hasLoadedScript?.()) {
+        if (lastId && !isLocalScriptId(lastId) && !handlers.hasLoadedScript?.()) {
           await openScriptById(lastId);
           return { skipLocalDraft: true };
+        }
+
+        if (isLocalScriptId(currentScriptId)) {
+          // migrated after app.js assigns the local script id
         }
       } else {
         updateSyncDot('local');

@@ -141,6 +141,10 @@ export async function listCloudScripts() {
 }
 
 export async function fetchScript(id) {
+  if (isLocalScriptId(id)) {
+    return idbGetScript(id);
+  }
+
   const cached = await idbGetScript(id);
   const client = await getClient();
 
@@ -160,48 +164,81 @@ export async function fetchScript(id) {
 }
 
 export async function saveCloudScript(script) {
-  const payload = {
-    id: script.id,
-    title: script.title,
-    title_page: script.titlePage,
-    lines: script.lines,
-    updated_at: new Date().toISOString(),
-  };
+  const updatedAt = new Date().toISOString();
+  const localId = script.id;
 
-  await idbPutScript({ ...script, updatedAt: payload.updated_at });
+  await idbPutScript({ ...script, updatedAt });
 
   if (!navigator.onLine) {
-    await idbPushSyncQueue(payload);
-    return { offline: true, script: { ...script, updatedAt: payload.updated_at } };
+    await idbPushSyncQueue(buildQueueItem(script, updatedAt, localId));
+    return { offline: true, script: { ...script, updatedAt } };
   }
 
   const client = await getClient();
   if (!client) {
-    await idbPushSyncQueue(payload);
-    return { offline: true, script: { ...script, updatedAt: payload.updated_at } };
+    await idbPushSyncQueue(buildQueueItem(script, updatedAt, localId));
+    return { offline: true, script: { ...script, updatedAt } };
   }
 
   const user = await getUser();
   if (!user) {
-    await idbPushSyncQueue(payload);
-    return { offline: true, script: { ...script, updatedAt: payload.updated_at } };
+    await idbPushSyncQueue(buildQueueItem(script, updatedAt, localId));
+    return { offline: true, script: { ...script, updatedAt } };
   }
 
-  const { data, error } = await client
-    .from('scripts')
-    .upsert({ ...payload, user_id: user.id })
-    .select()
-    .single();
+  try {
+    let saved;
 
-  if (error) {
-    await idbPushSyncQueue(payload);
+    if (isLocalScriptId(localId)) {
+      const { data, error } = await client
+        .from('scripts')
+        .insert({
+          title: script.title,
+          title_page: script.titlePage,
+          lines: script.lines,
+          user_id: user.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      saved = rowToScript(data);
+      await idbDeleteScript(localId);
+    } else {
+      const { data, error } = await client
+        .from('scripts')
+        .upsert({
+          id: localId,
+          title: script.title,
+          title_page: script.titlePage,
+          lines: script.lines,
+          updated_at: updatedAt,
+          user_id: user.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      saved = rowToScript(data);
+    }
+
+    await idbClearSyncQueueItem(localId);
+    await idbPutScript(saved);
+    return { offline: false, script: saved, migrated: isLocalScriptId(localId) };
+  } catch (error) {
+    await idbPushSyncQueue(buildQueueItem(script, updatedAt, localId));
     throw error;
   }
+}
 
-  await idbClearSyncQueueItem(script.id);
-  const saved = rowToScript(data);
-  await idbPutScript(saved);
-  return { offline: false, script: saved };
+function buildQueueItem(script, updatedAt, id) {
+  return {
+    id,
+    title: script.title,
+    title_page: script.titlePage,
+    lines: script.lines,
+    updated_at: updatedAt,
+  };
 }
 
 export async function createCloudScript(title = 'Untitled Screenplay') {
@@ -247,7 +284,17 @@ export async function flushSyncQueue() {
       const client = await getClient();
       const user = await getUser();
       if (!client || !user) break;
-      await client.from('scripts').upsert({ ...item, user_id: user.id });
+
+      if (isLocalScriptId(item.id)) {
+        await client.from('scripts').insert({
+          title: item.title,
+          title_page: item.title_page,
+          lines: item.lines,
+          user_id: user.id,
+        });
+      } else {
+        await client.from('scripts').upsert({ ...item, user_id: user.id });
+      }
       await idbClearSyncQueueItem(item.id);
     } catch {
       break;
@@ -258,6 +305,8 @@ export async function flushSyncQueue() {
 export function subscribeToScript(scriptId, callback) {
   unsubscribeRealtime();
   onRemoteUpdate = callback;
+
+  if (isLocalScriptId(scriptId)) return;
 
   getClient().then((client) => {
     if (!client || !scriptId) return;
@@ -301,4 +350,8 @@ export async function mergeLocalAndCloud() {
 
 export function generateLocalId() {
   return `local-${crypto.randomUUID()}`;
+}
+
+export function isLocalScriptId(id) {
+  return typeof id === 'string' && id.startsWith('local-');
 }
