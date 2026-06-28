@@ -45,6 +45,13 @@ import {
 import { initAutocomplete } from './autocomplete.js';
 import { initFindReplace } from './find-replace.js';
 import { initSyncManager } from './sync-ui.js';
+import {
+  createEmptyNotes,
+  normalizeNotes,
+  renderNotesPanel,
+  readNotesFromDOM,
+  bindNotesInput,
+} from './notes.js';
 import { generateLocalId, setLastOpenedScriptId, getUser, isLocalScriptId } from './cloud-sync.js';
 import { idbPutScript } from './idb.js';
 
@@ -55,6 +62,7 @@ const elementBtns = document.querySelectorAll('.element-btn');
 const sceneNav = document.getElementById('scene-nav');
 const characterNav = document.getElementById('character-nav');
 const titlePageView = document.getElementById('title-page-view');
+const notesView = document.getElementById('notes-view');
 const scriptView = document.getElementById('script-view');
 const elementToolbar = document.getElementById('element-toolbar');
 const printTitlePage = document.getElementById('print-title-page');
@@ -75,7 +83,9 @@ let fileHandle = null;
 let isDirty = false;
 let autoSaveTimer = null;
 let titlePageData = createTitlePageData();
-let viewMode = 'script'; // 'script' | 'title-page'
+let scriptNotesData = createEmptyNotes();
+let viewMode = 'script'; // 'script' | 'title-page' | 'notes'
+let notesUnbind = null;
 let syncManager = null;
 let hasLoadedScript = false;
 
@@ -87,12 +97,16 @@ const findReplace = initFindReplace(editor, () => {
 });
 
 function getScriptSnapshot() {
+  if (viewMode === 'notes') {
+    scriptNotesData = readNotesFromDOM(notesView);
+  }
   return {
     title: scriptTitle.value || 'Untitled Screenplay',
     lines: serializeLines(editor),
     titlePage: viewMode === 'title-page'
       ? readTitlePageFromDOM(titlePageView)
       : titlePageData,
+    notes: normalizeNotes(scriptNotesData),
   };
 }
 
@@ -123,9 +137,10 @@ function cycleElementType(forward = true) {
 
 function refreshUI() {
   const lines = serializeLines(editor);
+  const notesNavOptions = { onOpenNotes: (focus) => openNotes(focus) };
   updateStats(editor, statElements, lines);
-  updateSceneNav(editor, sceneNav);
-  updateCharacterNav(editor, characterNav);
+  updateSceneNav(editor, sceneNav, notesNavOptions);
+  updateCharacterNav(editor, characterNav, notesNavOptions);
   updateCursorStatus(editor, statusCursor);
   requestAnimationFrame(() => updatePagination(editor));
 }
@@ -134,7 +149,7 @@ function scheduleAutoSave() {
   clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(async () => {
     const snap = getScriptSnapshot();
-    saveToLocalStorage(snap.title, snap.lines, snap.titlePage);
+    saveToLocalStorage(snap.title, snap.lines, snap.titlePage, snap.notes);
 
     const id = syncManager?.getCurrentScriptId();
     if (id) {
@@ -143,6 +158,7 @@ function scheduleAutoSave() {
         title: snap.title,
         titlePage: snap.titlePage,
         lines: snap.lines,
+        notes: snap.notes,
         updatedAt: new Date().toISOString(),
       });
     }
@@ -290,8 +306,24 @@ function handlePaste(e) {
   refreshUI();
 }
 
-function setViewMode(mode) {
+function persistCurrentViewData() {
+  if (viewMode === 'title-page') {
+    titlePageData = readTitlePageFromDOM(titlePageView);
+  } else if (viewMode === 'notes') {
+    scriptNotesData = readNotesFromDOM(notesView);
+  }
+}
+
+function setViewMode(mode, notesFocus = null) {
+  if (mode !== viewMode) persistCurrentViewData();
   viewMode = mode;
+
+  titlePageView.classList.add('hidden');
+  notesView.classList.add('hidden');
+  scriptView.classList.add('hidden');
+  elementToolbar.classList.add('hidden');
+  document.getElementById('btn-title-page')?.classList.remove('active');
+  document.getElementById('btn-notes')?.classList.remove('active');
 
   if (mode === 'title-page') {
     titlePageData.title = titlePageData.title || scriptTitle.value;
@@ -302,24 +334,43 @@ function setViewMode(mode) {
       scheduleAutoSave();
     });
     titlePageView.classList.remove('hidden');
-    scriptView.classList.add('hidden');
-    elementToolbar.classList.add('hidden');
     statusView.textContent = 'Title Page';
     statusElement.textContent = '—';
-    document.getElementById('btn-title-page').classList.add('active');
+    document.getElementById('btn-title-page')?.classList.add('active');
+  } else if (mode === 'notes') {
+    notesUnbind?.();
+    renderNotesPanel(notesView, scriptNotesData, serializeLines(editor), notesFocus);
+    notesUnbind = bindNotesInput(notesView, (notes) => {
+      scriptNotesData = notes;
+      setDirty();
+      scheduleAutoSave();
+    });
+    notesView.classList.remove('hidden');
+    statusView.textContent = 'Notes';
+    statusElement.textContent = '—';
+    document.getElementById('btn-notes')?.classList.add('active');
   } else {
     titlePageData = readTitlePageFromDOM(titlePageView);
-    titlePageView.classList.add('hidden');
     scriptView.classList.remove('hidden');
     elementToolbar.classList.remove('hidden');
     statusView.textContent = 'Script';
-    document.getElementById('btn-title-page').classList.remove('active');
     refreshUI();
   }
 }
 
 function toggleTitlePage() {
   setViewMode(viewMode === 'title-page' ? 'script' : 'title-page');
+}
+
+function openNotes(focus = null) {
+  if (viewMode === 'title-page') {
+    titlePageData = readTitlePageFromDOM(titlePageView);
+  }
+  setViewMode('notes', focus);
+}
+
+function toggleNotes() {
+  setViewMode(viewMode === 'notes' ? 'script' : 'notes');
 }
 
 function preparePrintTitlePage() {
@@ -331,15 +382,13 @@ function preparePrintTitlePage() {
 }
 
 async function saveScript() {
-  if (viewMode === 'title-page') {
-    titlePageData = readTitlePageFromDOM(titlePageView);
-  }
+  persistCurrentViewData();
   const snap = getScriptSnapshot();
-  const result = await saveToFile(snap.title, snap.lines, snap.titlePage, fileHandle);
+  const result = await saveToFile(snap.title, snap.lines, snap.titlePage, fileHandle, snap.notes);
 
   if (result) {
     if (result.handle) fileHandle = result.handle;
-    saveToLocalStorage(snap.title, snap.lines, snap.titlePage);
+    saveToLocalStorage(snap.title, snap.lines, snap.titlePage, snap.notes);
     setDirty(false);
     statusSave.textContent = `Saved ${result.filename || ''}`.trim();
     statusSave.className = 'saved';
@@ -361,9 +410,10 @@ async function openScript() {
   fileHandle = data.handle || null;
 }
 
-function loadScript({ id, title, lines, titlePage }) {
+function loadScript({ id, title, lines, titlePage, notes }) {
   scriptTitle.value = title;
   titlePageData = titlePage || createTitlePageData({ title });
+  scriptNotesData = normalizeNotes(notes);
   initEditorContent(editor, lines);
   renderTitlePage(titlePageView, titlePageData, (data) => {
     titlePageData = data;
@@ -390,6 +440,7 @@ async function newScript() {
   scriptTitle.value = '';
   fileHandle = null;
   titlePageData = createTitlePageData();
+  scriptNotesData = createEmptyNotes();
 
   const cloudCreated = await syncManager?.handleNewScript();
   if (!cloudCreated) {
@@ -414,10 +465,28 @@ async function newScript() {
   refreshUI();
 }
 
+async function resetToBlankScript() {
+  scriptTitle.value = '';
+  fileHandle = null;
+  titlePageData = createTitlePageData();
+  scriptNotesData = createEmptyNotes();
+  const localId = generateLocalId();
+  syncManager?.setCurrentScriptId(localId);
+  initEditorContent(editor);
+  renderTitlePage(titlePageView, titlePageData, (data) => {
+    titlePageData = data;
+    setDirty();
+    scheduleAutoSave();
+  });
+  setViewMode('script');
+  setCurrentElementType('scene-heading');
+  setDirty(false);
+  hasLoadedScript = true;
+  refreshUI();
+}
+
 function exportScript(format) {
-  if (viewMode === 'title-page') {
-    titlePageData = readTitlePageFromDOM(titlePageView);
-  }
+  persistCurrentViewData();
   const title = scriptTitle.value || 'Untitled Screenplay';
   const lines = serializeLines(editor);
 
@@ -487,6 +556,8 @@ function bindEvents() {
   document.getElementById('btn-open').addEventListener('click', openScript);
   document.getElementById('btn-save').addEventListener('click', saveScript);
   document.getElementById('btn-title-page').addEventListener('click', toggleTitlePage);
+  document.getElementById('btn-notes').addEventListener('click', toggleNotes);
+  document.getElementById('btn-sidebar-notes')?.addEventListener('click', () => openNotes({ type: 'story' }));
   document.getElementById('btn-print').addEventListener('click', () => {
     preparePrintTitlePage();
     window.print();
@@ -534,7 +605,7 @@ function bindEvents() {
   window.addEventListener('beforeunload', (e) => {
     if (isDirty) {
       const snap = getScriptSnapshot();
-      saveToLocalStorage(snap.title, snap.lines, snap.titlePage);
+      saveToLocalStorage(snap.title, snap.lines, snap.titlePage, snap.notes);
       syncManager?.pushToCloud(true);
       e.preventDefault();
     }
@@ -558,6 +629,7 @@ async function init() {
       isDirty: () => isDirty,
       confirmDiscard: () => confirm('You have unsaved changes. Continue?'),
       hasLoadedScript: () => hasLoadedScript,
+      onAllScriptsDeleted: () => resetToBlankScript(),
     });
 
     const syncResult = await syncManager.init();
@@ -569,6 +641,7 @@ async function init() {
         syncManager.setCurrentScriptId(localId);
         scriptTitle.value = draft.title || '';
         titlePageData = draft.titlePage || createTitlePageData({ title: draft.title });
+        scriptNotesData = normalizeNotes(draft.notes);
         initEditorContent(editor, draft.lines);
         hasLoadedScript = true;
       } else {

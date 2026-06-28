@@ -1,14 +1,15 @@
 import { parseFountain } from './fountain.js';
 
 const STORAGE_KEY = 'screenplay-draft';
-export const FILE_VERSION = 2;
+export const FILE_VERSION = 3;
 
-export function buildScriptData(title, lines, titlePage = null) {
+export function buildScriptData(title, lines, titlePage = null, notes = null) {
   return {
     version: FILE_VERSION,
     title,
     titlePage: titlePage || defaultTitlePage(title),
     lines,
+    notes: notes || { story: '', characters: {}, scenes: {} },
     savedAt: new Date().toISOString(),
   };
 }
@@ -26,8 +27,8 @@ function defaultTitlePage(title) {
 /**
  * Save script to localStorage as auto-backup.
  */
-export function saveToLocalStorage(title, lines, titlePage) {
-  const data = buildScriptData(title, lines, titlePage);
+export function saveToLocalStorage(title, lines, titlePage, notes) {
+  const data = buildScriptData(title, lines, titlePage, notes);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   return data;
 }
@@ -48,8 +49,8 @@ export function loadFromLocalStorage() {
 /**
  * Build .spx file content.
  */
-export function buildFileContent(title, lines, titlePage) {
-  return JSON.stringify(buildScriptData(title, lines, titlePage), null, 2);
+export function buildFileContent(title, lines, titlePage, notes) {
+  return JSON.stringify(buildScriptData(title, lines, titlePage, notes), null, 2);
 }
 
 /**
@@ -67,6 +68,7 @@ export function parseFileContent(text) {
       type: l.type || 'action',
       text: l.text || '',
     })),
+    notes: data.notes || { story: '', characters: {}, scenes: {} },
   };
 }
 
@@ -97,8 +99,8 @@ export function sanitizeFilename(title) {
 /**
  * Try File System Access API save; fall back to download.
  */
-export async function saveToFile(title, lines, titlePage, existingHandle = null) {
-  const content = buildFileContent(title, lines, titlePage);
+export async function saveToFile(title, lines, titlePage, existingHandle = null, notes = null) {
+  const content = buildFileContent(title, lines, titlePage, notes);
   const filename = `${sanitizeFilename(title)}.spx`;
 
   if (existingHandle) {

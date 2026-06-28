@@ -42,7 +42,7 @@ export function updateStats(editor, elements, serializedLines) {
 /**
  * Build scene navigation from scene headings.
  */
-export function updateSceneNav(editor, navEl) {
+export function updateSceneNav(editor, navEl, options = {}) {
   const sceneLines = getAllLines(editor).filter(
     (l) => l.dataset.type === 'scene-heading' && l.textContent.trim()
   );
@@ -55,8 +55,12 @@ export function updateSceneNav(editor, navEl) {
   }
 
   sceneLines.forEach((line, i) => {
+    const row = document.createElement('div');
+    row.className = 'nav-row';
+
     const btn = document.createElement('button');
     btn.type = 'button';
+    btn.className = 'nav-jump-btn';
     btn.textContent = `${i + 1}. ${line.textContent.trim().slice(0, 40)}`;
     btn.title = line.textContent.trim();
     btn.addEventListener('click', () => {
@@ -68,14 +72,30 @@ export function updateSceneNav(editor, navEl) {
       sel.removeAllRanges();
       sel.addRange(range);
     });
-    navEl.appendChild(btn);
+
+    row.appendChild(btn);
+
+    if (options.onOpenNotes) {
+      const notesBtn = document.createElement('button');
+      notesBtn.type = 'button';
+      notesBtn.className = 'nav-notes-btn';
+      notesBtn.title = 'Scene notes';
+      notesBtn.textContent = 'Notes';
+      notesBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        options.onOpenNotes({ type: 'scene', key: String(i) });
+      });
+      row.appendChild(notesBtn);
+    }
+
+    navEl.appendChild(row);
   });
 }
 
 /**
  * Update character list in sidebar.
  */
-export function updateCharacterNav(editor, navEl) {
+export function updateCharacterNav(editor, navEl, options = {}) {
   const names = getCharacterNames(editor);
   navEl.innerHTML = '';
 
@@ -85,8 +105,12 @@ export function updateCharacterNav(editor, navEl) {
   }
 
   names.forEach((name) => {
+    const row = document.createElement('div');
+    row.className = 'nav-row';
+
     const btn = document.createElement('button');
     btn.type = 'button';
+    btn.className = 'nav-jump-btn';
     btn.textContent = name;
     btn.addEventListener('click', () => {
       const line = getAllLines(editor).find(
@@ -97,7 +121,23 @@ export function updateCharacterNav(editor, navEl) {
         focusLineSimple(line);
       }
     });
-    navEl.appendChild(btn);
+
+    row.appendChild(btn);
+
+    if (options.onOpenNotes) {
+      const notesBtn = document.createElement('button');
+      notesBtn.type = 'button';
+      notesBtn.className = 'nav-notes-btn';
+      notesBtn.title = `Notes for ${name}`;
+      notesBtn.textContent = 'Notes';
+      notesBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        options.onOpenNotes({ type: 'character', key: name });
+      });
+      row.appendChild(notesBtn);
+    }
+
+    navEl.appendChild(row);
   });
 }
 

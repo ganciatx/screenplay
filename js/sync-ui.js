@@ -101,12 +101,29 @@ export function initSyncManager(handlers) {
 
     els.library.innerHTML = '';
     scriptList.forEach((s) => {
+      const row = document.createElement('div');
+      row.className = 'library-row';
+
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'library-item' + (s.id === currentScriptId ? ' active' : '');
       btn.innerHTML = `<span class="library-title">${escapeHtml(s.title || 'Untitled')}</span><span class="library-meta">${formatRelativeTime(s.updatedAt)}</span>`;
       btn.addEventListener('click', () => openScriptById(s.id));
-      els.library.appendChild(btn);
+
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'library-delete';
+      del.title = 'Delete script';
+      del.setAttribute('aria-label', `Delete ${s.title || 'Untitled'}`);
+      del.textContent = '×';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteScriptById(s.id, s.title || 'Untitled');
+      });
+
+      row.appendChild(btn);
+      row.appendChild(del);
+      els.library.appendChild(row);
     });
   }
 
@@ -114,6 +131,31 @@ export function initSyncManager(handlers) {
     const d = document.createElement('div');
     d.textContent = str;
     return d.innerHTML;
+  }
+
+  async function deleteScriptById(id, title) {
+    if (!confirm(`Delete "${title}"?\n\nThis cannot be undone.`)) return;
+
+    try {
+      await deleteCloudScript(id);
+    } catch (err) {
+      alert('Could not delete script: ' + err.message);
+      return;
+    }
+
+    if (id === currentScriptId) {
+      unsubscribeRealtime();
+      currentScriptId = null;
+      currentUpdatedAt = null;
+      await refreshLibrary();
+      if (scriptList.length) {
+        await openScriptById(scriptList[0].id);
+      } else {
+        handlers.onAllScriptsDeleted?.();
+      }
+    } else {
+      await refreshLibrary();
+    }
   }
 
   async function openScriptById(id) {
@@ -134,6 +176,7 @@ export function initSyncManager(handlers) {
         title: script.title,
         lines: script.lines,
         titlePage: script.titlePage,
+        notes: script.notes,
       });
 
       subscribeToScript(id, handleRemoteUpdate);
@@ -164,6 +207,7 @@ export function initSyncManager(handlers) {
       title: script.title,
       lines: script.lines,
       titlePage: script.titlePage,
+      notes: script.notes,
     });
     setDirty(false);
     setSyncStatus?.('Updated from another device');
@@ -194,6 +238,7 @@ export function initSyncManager(handlers) {
         title: snap.title,
         titlePage: snap.titlePage,
         lines: snap.lines,
+        notes: snap.notes,
         updatedAt: currentUpdatedAt,
       });
 
@@ -227,6 +272,7 @@ export function initSyncManager(handlers) {
           title: script.title,
           lines: script.lines,
           titlePage: script.titlePage,
+          notes: script.notes,
         });
         subscribeToScript(script.id, handleRemoteUpdate);
         await refreshLibrary();

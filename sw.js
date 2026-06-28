@@ -1,4 +1,4 @@
-const CACHE = 'screenplay-v5';
+const CACHE = 'screenplay-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -17,6 +17,7 @@ const ASSETS = [
   './js/idb.js',
   './js/cloud-sync.js',
   './js/sync-ui.js',
+  './js/notes.js',
   './manifest.json',
   './icons/icon.svg',
 ];

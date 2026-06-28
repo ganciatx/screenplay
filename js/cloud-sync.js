@@ -174,6 +174,7 @@ function rowToScript(row) {
     title: row.title,
     titlePage: row.title_page || {},
     lines: row.lines || [],
+    notes: row.notes || {},
     updatedAt: row.updated_at,
     userId: row.user_id,
   };
@@ -249,6 +250,7 @@ export async function saveCloudScript(script) {
           title: script.title,
           title_page: script.titlePage,
           lines: script.lines,
+          notes: script.notes || {},
           user_id: user.id,
         })
         .select()
@@ -265,6 +267,7 @@ export async function saveCloudScript(script) {
           title: script.title,
           title_page: script.titlePage,
           lines: script.lines,
+          notes: script.notes || {},
           updated_at: updatedAt,
           user_id: user.id,
         })
@@ -290,6 +293,7 @@ function buildQueueItem(script, updatedAt, id) {
     title: script.title,
     title_page: script.titlePage,
     lines: script.lines,
+    notes: script.notes || {},
     updated_at: updatedAt,
   };
 }
@@ -308,6 +312,7 @@ export async function createCloudScript(title = 'Untitled Screenplay') {
         { type: 'scene-heading', text: 'INT. LOCATION - DAY' },
         { type: 'action', text: '' },
       ],
+      notes: {},
       user_id: auth.user.id,
     })
     .select()
@@ -344,6 +349,7 @@ export async function flushSyncQueue() {
           title: item.title,
           title_page: item.title_page,
           lines: item.lines,
+          notes: item.notes || {},
           user_id: auth.user.id,
         });
       } else {

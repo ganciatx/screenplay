@@ -23,6 +23,7 @@
       <h1 class="app-title">Screenplay</h1>
       <input type="text" id="script-title" class="script-title-input" placeholder="Untitled Screenplay" spellcheck="false">
       <button type="button" id="btn-title-page" class="toolbar-btn" title="Edit title page">Title Page</button>
+      <button type="button" id="btn-notes" class="toolbar-btn" title="Script notes">Notes</button>
     </div>
     <div class="toolbar-center" id="element-toolbar">
       <div class="element-selector" role="toolbar" aria-label="Element type">
@@ -73,6 +74,10 @@
       </dl>
     </section>
     <section class="sidebar-section">
+      <h2>Notes</h2>
+      <button type="button" id="btn-sidebar-notes" class="sidebar-action-btn">Open script notes</button>
+    </section>
+    <section class="sidebar-section">
       <h2>Characters</h2>
       <nav id="character-nav" class="scene-nav" aria-label="Characters">
         <p class="empty-state">No characters yet</p>
@@ -100,6 +105,7 @@
 
   <main class="editor-container">
     <div id="title-page-view" class="page-wrapper title-page-wrapper hidden"></div>
+    <div id="notes-view" class="page-wrapper notes-view hidden" aria-label="Script notes"></div>
     <div id="script-view" class="page-wrapper">
       <div id="editor" class="editor" contenteditable="true" spellcheck="true" aria-label="Screenplay editor"></div>
     </div>

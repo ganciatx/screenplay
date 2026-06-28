@@ -7,6 +7,7 @@ create table if not exists public.scripts (
   title text not null default 'Untitled Screenplay',
   title_page jsonb not null default '{}',
   lines jsonb not null default '[]',
+  notes jsonb not null default '{}',
   updated_at timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
