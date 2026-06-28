@@ -136,7 +136,9 @@ export async function signIn(email, password) {
   const client = await getClient();
   const { data, error } = await client.auth.signInWithPassword({ email, password });
   if (error) throw error;
-  return data.user;
+  const auth = await requireAuth();
+  if (!auth) throw new Error('Sign-in succeeded but session could not be verified. Try again.');
+  return auth.user;
 }
 
 export async function signUp(email, password) {
@@ -247,6 +249,7 @@ export async function saveCloudScript(script) {
           title: script.title,
           title_page: script.titlePage,
           lines: script.lines,
+          user_id: user.id,
         })
         .select()
         .single();
@@ -305,6 +308,7 @@ export async function createCloudScript(title = 'Untitled Screenplay') {
         { type: 'scene-heading', text: 'INT. LOCATION - DAY' },
         { type: 'action', text: '' },
       ],
+      user_id: auth.user.id,
     })
     .select()
     .single();
@@ -340,6 +344,7 @@ export async function flushSyncQueue() {
           title: item.title,
           title_page: item.title_page,
           lines: item.lines,
+          user_id: auth.user.id,
         });
       } else {
         await client.from('scripts').upsert({ ...item, user_id: auth.user.id });

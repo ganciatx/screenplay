@@ -216,21 +216,26 @@ export function initSyncManager(handlers) {
   async function handleNewScript() {
     const user = await getUser();
     if (user && isCloudConfigured()) {
-      updateSyncDot('syncing');
-      const script = await createCloudScript();
-      currentScriptId = script.id;
-      currentUpdatedAt = script.updatedAt;
-      await setLastOpenedScriptId(script.id);
-      loadScript({
-        id: script.id,
-        title: script.title,
-        lines: script.lines,
-        titlePage: script.titlePage,
-      });
-      subscribeToScript(script.id, handleRemoteUpdate);
-      await refreshLibrary();
-      updateSyncDot('synced');
-      return true;
+      try {
+        updateSyncDot('syncing');
+        const script = await createCloudScript();
+        currentScriptId = script.id;
+        currentUpdatedAt = script.updatedAt;
+        await setLastOpenedScriptId(script.id);
+        loadScript({
+          id: script.id,
+          title: script.title,
+          lines: script.lines,
+          titlePage: script.titlePage,
+        });
+        subscribeToScript(script.id, handleRemoteUpdate);
+        await refreshLibrary();
+        updateSyncDot('synced');
+        return true;
+      } catch {
+        updateSyncDot('error');
+        setSyncStatus?.('Cloud sync needs setup — run supabase/setup.sql in Supabase');
+      }
     }
 
     currentScriptId = generateLocalId();
@@ -238,25 +243,38 @@ export function initSyncManager(handlers) {
     return false;
   }
 
-  async function handleSignIn(email, password) {
-    await signIn(email, password);
-    await flushSyncQueue();
+  async function syncAfterSignIn() {
+    await flushSyncQueue().catch(() => {});
+
     if (isLocalScriptId(currentScriptId)) {
       await pushToCloud(true);
     }
-    await refreshLibrary();
-    await openLastOrFirst();
+
+    try {
+      await refreshLibrary();
+      if (!currentScriptId && scriptList.length) {
+        await openScriptById(scriptList[0].id);
+      } else if (!currentScriptId) {
+        await handleNewScript();
+      }
+    } catch {
+      updateSyncDot('error');
+      setSyncStatus?.('Cloud sync needs setup — run supabase/setup.sql in Supabase');
+    }
+  }
+
+  async function handleSignIn(email, password) {
+    await signIn(email, password);
     closeAuthModal();
+    await updateAccountButton();
+    await syncAfterSignIn();
   }
 
   async function handleSignUp(email, password) {
     await signUp(email, password);
-    await flushSyncQueue();
-    if (isLocalScriptId(currentScriptId)) {
-      await pushToCloud(true);
-    }
-    await refreshLibrary();
     closeAuthModal();
+    await updateAccountButton();
+    await syncAfterSignIn();
   }
 
   async function openLastOrFirst() {
@@ -344,7 +362,6 @@ export function initSyncManager(handlers) {
       if (!email || !password) return alert('Enter email and password');
       try {
         await handleSignIn(email, password);
-        await updateAccountButton();
       } catch (err) {
         alert(err.message);
       }
